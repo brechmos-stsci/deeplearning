@@ -1,3 +1,4 @@
+import os
 from keras.applications.resnet50 import ResNet50
 from keras.preprocessing import image
 from keras.applications.resnet50 import preprocess_input, decode_predictions
@@ -19,7 +20,7 @@ model = ResNet50(weights='imagenet')
 # ---------------------------------------------------------------------
 
 ## Load in the data
-carina_orig = np.load('/Users/crjones/Documents/Science/HargisDDRF/carina_224.npy')
+carina_orig = np.load('{}/Box Sync/DeepLearning/carina/carina_224.npy'.format(os.environ['HOME']))
 carina = carina_orig[:,:,:,:500]
 print(carina.shape)
 
