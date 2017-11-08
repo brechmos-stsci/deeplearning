@@ -135,7 +135,7 @@ for ii in np.arange(N):
         denominator = min(sum(p1), sum(p2))
         A_overlap[ii,jj] = numerator / denominator
 
-np.savez('session.npz', 
+np.savez('{}/Box Sync/DeepLearning/similarity_testing/session.npz'.format(os.environ['HOME']), 
         A_dotprod= A_dotprod, A_l1= A_l1, A_l2= A_l2, A_jaccard= A_jaccard, 
         A_dice= A_dice, A_overlap = A_overlap , carina_orig=carina_orig, carina=carina, X=X, Y=Y)
 

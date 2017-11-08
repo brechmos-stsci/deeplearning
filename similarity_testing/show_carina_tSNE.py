@@ -30,7 +30,7 @@ def show_img(inds, IMG, carina_orig, title):
 
 
 # Load the data
-A = np.load('similarity_0p0_threshold.npz')
+A = np.load('{}/Box Sync/DeepLearning/similarity_testing/similarity_0p0_threshold.npz'.format(os.environ['HOME']))
 for k,v in A.items():
     globals()[k] = v
 
@@ -40,7 +40,7 @@ IMGS = [1125, 1225, 1325, 1425, 1429, 1432, 1434, 1485, 152, 1885, 2025, 845, 86
 
 for IMG in IMGS:
 
-    output = 'output_similarity_0p0_threshold'
+    output = '{}/Box Sync/DeepLearning/similarity_testing/output_similarity_0p0_threshold'.format(os.environ['HOME'])
 
     # Find the most similar to index = 100, as an example
     inds = argsort(A_l2[IMG])[::-1] # want the largest number
