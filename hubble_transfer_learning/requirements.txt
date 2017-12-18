@@ -1,7 +1,8 @@
-keras
-ipython 
-matplotlib 
-numpy 
-scipy 
+astropy
+blitzdb
+Keras
+matplotlib
+numpy
+scikit-learn
+scipy
 sklearn
-
