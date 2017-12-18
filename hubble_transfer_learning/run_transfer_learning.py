@@ -1,100 +1,167 @@
-import os
-from keras.applications.resnet50 import ResNet50
-from keras.preprocessing import image
-from keras.applications.resnet50 import preprocess_input, decode_predictions
-from skimage import data, exposure
+import pickle
+import time
 import numpy as np
-import scipy.misc
-from scipy.misc import toimage
 import glob
-from PIL import Image
-from skimage import exposure
-import requests
-from io import BytesIO
-from sklearn.manifold import TSNE
-from sklearn.decomposition import PCA
-from collections import Counter, OrderedDict
-import matplotlib.pyplot as plt
+from collections import OrderedDict
+from blitzdb import Document
+from blitzdb import FileBackend
+from config import Configuration
 
-import shelve
-
-model = ResNet50(weights='imagenet')
-
-# ---------------------------------------------------------------------
-# Load and pre-processing
-# ---------------------------------------------------------------------
 
 def gray2rgb(data):
-    data_out = zeros((224,224,3,data.shape[0]))
-    data_out[:,:,0] = data.transpose((1,2,0))
-    data_out[:,:,1] = data.transpose((1,2,0))
-    data_out[:,:,2] = data.transpose((1,2,0))
+    """
+    Convert 2D data set to 3D gray scale
+
+    :param data:
+    :return:
+    """
+    data_out = np.zeros((224, 224, 3, data.shape[0]))
+    data_out[:, :, 0] = data.transpose((1, 2, 0))
+    data_out[:, :, 1] = data.transpose((1, 2, 0))
+    data_out[:, :, 2] = data.transpose((1, 2, 0))
 
     return data_out
 
+
 def rgb2plot(data):
-    mindata, maxdata = prctile(data, (0.01, 99))
-    return clip((data - mindata) / (maxdata-mindata) * 255, 0, 255).astype(uint8)
+    """
+    Convert the 3 planes of data to a proper format for RGB imshow.
 
-files = glob.glob('{}/Box Sync/DeepLearning/hubble/HST/cutouts/hubble_cutouts_*.npz'.format(os.environ['HOME']))
+    :param data:
+    :return:
+    """
+    mindata, maxdata = np.prctile(data, (0.01, 99))
+    return np.clip((data - mindata) / (maxdata - mindata) * 255, 0, 255).astype(np.uint8)
 
-## Load in the data
-allpredictions = OrderedDict()
-for filename in files[:30]:
-    print('processing {}'.format(filename.split('/')[-1]))
-    npzfile = np.load(filename)
-    data_orig = npzfile['cutouts']
 
-    # Make gray scale location
-    data = zeros((224,224,3,data_orig.shape[0]))
-    data[:,:,0] = data_orig.transpose((1,2,0))
-    data[:,:,1] = data_orig.transpose((1,2,0))
-    data[:,:,2] = data_orig.transpose((1,2,0))
+# Load the configuration file information
+c = Configuration()
+data_directory = c.data_directory
 
-    # Display the data
-    plt.figure(1)
-    plt.clf()
-    plt.imshow(rgb2plot(data[:,:,:,3]))
-    plt.colorbar()
-    plt.show()
+# Setup the storage mechanism
+backend = FileBackend("{}/prediction_database".format(data_directory))
 
-    N = data.shape[3]
 
+class DataDescription(Document):
+    pass
+
+
+class ProcessDescription(Document):
+    pass
+
+
+class ProcessResult(Document):
+    pass
+
+
+#  Save the data description part to the database
+try:
+    data_description = backend.get(DataDescription, {'name': 'hubblecutouts'})
+except DataDescription.DoesNotExist:
+    doc = {'name': 'hubblecutouts', 'description': 'hubble cutouts from Josh'}
+    data_description = DataDescription(doc)
+    backend.save(data_description) 
+    backend.commit()
+except DataDescription.MultipleDocumentsReturned:
+    # more than one in the database, ignore for now
+    pass
+
+# Now run through all the models
+for model_name in ['resnet50', 'vgg16', 'vgg19', 'inceptionv3', 'inceptionresnetv2']:
+    if model_name == 'resnet50':
+        # Add the process description information
+        from keras.applications.resnet50 import ResNet50
+        from keras.applications.resnet50 import preprocess_input, decode_predictions
+        model = ResNet50(weights='imagenet')
+        model_name = 'resnet50'
+    elif model_name == 'vgg16':
+        from keras.applications.vgg16 import VGG16
+        from keras.applications.vgg16 import preprocess_input, decode_predictions
+        model = VGG16(weights='imagenet')
+        model_name = 'vgg16'
+    elif model_name == 'vgg19':
+        from keras.applications.vgg19 import VGG19
+        from keras.applications.vgg19 import preprocess_input, decode_predictions
+        model = VGG19(weights='imagenet')
+        model_name = 'vgg19'
+    elif model_name == 'inceptionv3':
+        from keras.applications.inception_v3 import InceptionV3
+        from keras.applications.inception_v3 import preprocess_input, decode_predictions
+        model = InceptionV3(weights='imagenet')
+        model_name = 'inceptionv3'
+    elif model_name == 'inceptionresnetv2':
+        from keras.applications.inception_resnet_v2 import InceptionResNetV2
+        from keras.applications.inception_resnet_v2 import preprocess_input, decode_predictions
+        model = InceptionResNetV2(weights='imagenet')
+        model_name = 'inceptionresnetv2'
+    
+    #  Save the process description part
+    try:
+        process_description = backend.get(ProcessDescription, {'name': model_name})
+    except ProcessDescription.DoesNotExist:
+        doc = {'name': model_name, 'description': '{} with imagenet'.format(model_name)}
+        process_description = ProcessDescription(doc)
+        backend.save(process_description) 
+        backend.commit()
+    except ProcessDescription.MultipleDocumentsReturned:
+        pass
+    print(process_description.name)
+    
     # ---------------------------------------------------------------------
-    # Now processing
+    # Load and pre-processing
     # ---------------------------------------------------------------------
 
-    # Calculate the predicitons for all data
-    N = data.shape[3]
+    files = glob.glob('{}/hubble_cutouts_*.pck'.format(data_directory))
+    
+    # Load in the data
+    allpredictions = OrderedDict()
+    for filename in files:
 
-    for ii in range(N):
-        print('\r\t{} of {}'.format(ii, N), end='')
-        x = data[0:224,0:224,:,ii]
-        x = np.expand_dims(x, axis=0)
-        x = preprocess_input(x)
+        # Load up the cutouts
+        print('processing {}'.format(filename.split('/')[-1]))
+        data_orig = pickle.load(open(filename, 'rb'))
 
-        if sum(abs(x)) > 0.0001:
-            preds = model.predict(x)
-            # decode the results into a list of tuples (class, description, probability)
-            # (one such list for each sample in the batch)
-            predictions = decode_predictions(preds, top=100)[0]
-        else:
-            predictions = [('test', 'beaver', 0.0001),]
-        
-        allpredictions[(filename, ii)] = [(tt[1], tt[2]) for tt in predictions]
-    print('\n')
+        N = len(data_orig['cutouts'])
+    
+        # ---------------------------------------------------------------------
+        # Now processing
+        # ---------------------------------------------------------------------
+    
+        # Calculate the predicitons for all data
+    
+        start = time.time()
+        for ii in range(N):
+            print('\r\t{} of {}'.format(ii, N), end='')
 
-# Get a list of all the unique labels used
-labels = list(set([x[0] for k, y in allpredictions.items() for x in y ]))
+            # Set the data into the expected format
+            x = gray2rgb(data_orig['cutouts'][ii]['data'])
+            x = np.expand_dims(x, axis=0)
 
-# ----------------------------------------------------------
-# Calculate tSNE
-# ----------------------------------------------------------
+            # Do keras model image pre-processing
+            x = preprocess_input(x)
 
-print('Calculate the tSNE')
-X = np.zeros((len(allpredictions), len(labels)))
-for ii, (_, pred) in enumerate(allpredictions.items()):
-    for jj in pred:
-        X[ii,labels.index(jj[0])] = jj[1]
-Y = TSNE(n_components=2).fit_transform(X)
+            # There was an error at one point when the image was completely 0
+            # In this case I just set a single prediction with low weight.
+            # TODO:  Check to see if this is still an issue.
+            if np.sum(np.abs(x)) > 0.0001:
+                preds = model.predict(x)
+                # decode the results into a list of tuples (class, description, probability)
+                # (one such list for each sample in the batch)
+                predictions = decode_predictions(preds, top=100)[0]
+            else:
+                predictions = [('test', 'beaver', 0.0000000000001),]
 
+            # Save the results in the database.
+            doc = {
+                'data_description': data_description, 
+                'process_description': process_description, 
+                'filename': filename,
+                'middle': data_orig['cutouts'][ii]['middle'],
+                'cutout_number': ii,
+                'predictions': [{tt[1]: np.float64(tt[2])} for tt in predictions]
+                }
+            process_result = ProcessResult(doc)
+            backend.save(process_result) 
+            backend.commit()
+    
+        print('\r\tCalculate the predictions took {} seconds'.format(time.time() - start))
