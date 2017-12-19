@@ -59,7 +59,7 @@ for model_name in ['resnet50', 'vgg16', 'vgg19', 'inceptionv3', 'inceptionresnet
     print('Process description is {}'.format(process_description.name))
 
     # Grab the process results given the data description and process description information
-    process_results = backend.filter(ProcessResult,{'data_description.pk' : data_description.pk, 'process_description.pk': process_description.pk})
+    process_results = backend.filter(ProcessResult,{'data_description.pk' : data_description.pk, 'process_description.pk': process_description.pk}).sort('pk')
     N = len(process_results)
 
     # Find all the unique labels
@@ -89,5 +89,5 @@ for model_name in ['resnet50', 'vgg16', 'vgg19', 'inceptionv3', 'inceptionresnet
     print('\tCalculate the tSNE took {} seconds'.format(time.time() - start))
 
     # Write the data out to the tSNE sub directory
-    pickle.dump((Y,labels, process_result_filename_cutout_number),
+    pickle.dump((Y, labels, process_result_filename_cutout_number),
                 open('{}/tSNE/Y_labels_{}.pck'.format(data_directory, model_name), 'wb'))
