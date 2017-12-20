@@ -1,4 +1,4 @@
-import time
+import sys
 import pickle
 import numpy as np
 import glob
@@ -13,11 +13,19 @@ data_directory = c.data_directory
 
 class tSNEInteract:
 
-    def __init__(self):
-        # Choose the NN model to use
-        #self._model_name = 'resnet50'
-        #self._model_name = 'inceptionresnetv2'
-        self._model_name = 'inceptionv3'
+    _model_names = ['resnet50', 'vgg16', 'vgg19', 'inceptionresnetv2', 'inceptionv3']
+
+    def __init__(self, model_name=None):
+
+        # Set the NN model name
+        if not model_name:
+            # Choose the NN model to use
+            self._model_name = 'resnet50'
+
+        elif model_name in self._model_names:
+            self._model_name = model_name
+
+        # Random first image in the main window
         self._main_window_filename = 'hubble_cutouts_u2rq0101t.pck'
 
         self._main_window = None
@@ -60,6 +68,7 @@ class tSNEInteract:
         # Text
         plt.figure(1).text(0.6, 0.2, 'Click with 2nd or 3rd mouse button to select image...')
         plt.figure(1).text(0.05, 0.5, 'Click in main image or tSNE plot to find similar cutouts...')
+        plt.figure(1).text(0.6, 0.05, 'The tSNE data reduction calculated from data run through {}'.format(self._model_name), fontsize=8)
 
         plt.figure(1).show()
         plt.figure(1).canvas.draw()
@@ -182,4 +191,9 @@ class tSNEInteract:
 
 if __name__ == "__main__":
 
-    tsnei = tSNEInteract()
+    if len(sys.argv):
+        model_name = sys.argv[1]
+    else:
+        model_name = None
+
+    tsnei = tSNEInteract(model_name)
