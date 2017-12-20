@@ -45,16 +45,29 @@ class tSNEInteract:
         self._display_window(self._main_window, os.path.join(data_directory, self._main_window_filename))
 
     def _display_tsne(self):
+        """
+        Display the tSNE plot in the tsne_window.
+
+        :return:
+        """
         self._tsne_window.clear()
         self._tsne_window.plot(self._Y_tsne[:,0], self._Y_tsne[:,1], 'b.')
 
     def _setup_figure(self):
+        """
+        Setup the structure of the figure (axes and text)
+
+        :return:
+        """
+
         plt.figure(1)
         plt.clf()
 
+        # Two main axes
         self._tsne_window = plt.axes([0.05, 0.05, 0.4, 0.4])
         self._main_window = plt.axes([0.05, 0.55, 0.4, 0.4])
 
+        # Nine sub axes
         self._sub_windows = []
         for row in range(3):
             for col in range(3):
@@ -63,6 +76,7 @@ class tSNEInteract:
                 tt.set_yticks([])
                 self._sub_windows.append(tt)
 
+        # Register the button click
         self._cid = plt.figure(1).canvas.mpl_connect('button_press_event', self._onclick)
 
         # Text
@@ -70,17 +84,28 @@ class tSNEInteract:
         plt.figure(1).text(0.05, 0.5, 'Click in main image or tSNE plot to find similar cutouts...')
         plt.figure(1).text(0.6, 0.05, 'The tSNE data reduction calculated from data run through {}'.format(self._model_name), fontsize=8)
 
+        # Show
         plt.figure(1).show()
         plt.figure(1).canvas.draw()
 
     def _rgb2plot(self, data):
+        """
+        Convert the input data to RGB. This is basically clipping and cropping the intensity range for display
+
+        :param data:
+        :return:
+        """
 
         mindata, maxdata = np.percentile(data, (0.01, 99))
-
         return np.clip((data - mindata) / (maxdata-mindata) * 255, 0, 255).astype(np.uint8)
 
     def _display_from_tsne(self, x, y):
-        print('display_from_tsne {} {}'.format(x, y))
+        """
+        Display the similar cutouts based on a location in the tSNE space.
+
+        :param x, y: Location in tSNE space
+        :return:
+        """
 
         # Find the closest 9
         inds = np.argsort(np.sum( (self._Y_tsne-np.array([x, y]))**2, axis=1))
@@ -89,6 +114,7 @@ class tSNEInteract:
         self._display_tsne()
         self._tsne_window.plot(self._Y_tsne[inds[:9],0], self._Y_tsne[inds[:9],1], 'yo')
 
+        # Now run through the 9 sub axes and display the image data and cutout location.
         self._sub_window_filenames = []
         for ii, axis in enumerate(self._sub_windows):
             axis.clear()
@@ -108,9 +134,23 @@ class tSNEInteract:
         plt.figure(1).canvas.draw()
 
     def _tsne_window_callback(self, x, y):
+        """
+        Callback function if pressed in tSNE window.
+
+        :param x:
+        :param y:
+        :return:
+        """
         self._display_from_tsne(x,y)
 
     def _main_window_callback(self, x_image, y_image):
+        """
+        Callback function if pressed in Main window.
+
+        :param x_image:
+        :param y_image:
+        :return:
+        """
 
         x, y = x_image, y_image
 
@@ -143,11 +183,18 @@ class tSNEInteract:
         self._display_from_tsne(self._Y_tsne[indexes[inds[0]],0], self._Y_tsne[indexes[inds[0]],1])
 
     def _onclick(self, event):
+        """
+        Main callback if a mouse button is clicked in the main window.
 
-        # If tSNE
+        :param event:
+        :return:
+        """
+
+        # If clicked in tSNE
         if event.inaxes == self._tsne_window:
             self._tsne_window_callback(event.xdata, event.ydata)
 
+        # If clicked in the main window
         if event.inaxes == self._main_window:
             self._main_window_callback(event.xdata, event.ydata)
 
