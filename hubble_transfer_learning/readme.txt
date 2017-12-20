@@ -3,6 +3,13 @@ then display/interact with the data.
 
 The code requires the installation of some software from pip, those requirements are in the requirements.txt file.
 
+If the code should use data in another location (not in Box Sync), then create a file called "local_config.py" and
+have one line in it:
+
+DATA_DIRECTORY='/home/craig/data/hubble'
+
+But, obviously, change the directory above.
+
 # Code
 
 ## Main Code
