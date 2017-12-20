@@ -15,9 +15,9 @@ class tSNEInteract:
 
     def __init__(self):
         # Choose the NN model to use
-        self._model_name = 'resnet50'
+        #self._model_name = 'resnet50'
         #self._model_name = 'inceptionresnetv2'
-        #self._model_name = 'inceptionv3'
+        self._model_name = 'inceptionv3'
         self._main_window_filename = 'hubble_cutouts_u2rq0101t.pck'
 
         self._main_window = None
@@ -50,12 +50,16 @@ class tSNEInteract:
         self._sub_windows = []
         for row in range(3):
             for col in range(3):
-                tt = plt.axes([0.5+0.17*col, 0.05+0.25*row, 0.15, 0.15])
+                tt = plt.axes([0.5+0.17*col, 0.75-0.25*row, 0.15, 0.15])
                 tt.set_xticks([])
                 tt.set_yticks([])
                 self._sub_windows.append(tt)
 
         self._cid = plt.figure(1).canvas.mpl_connect('button_press_event', self._onclick)
+
+        # Text
+        plt.figure(1).text(0.6, 0.2, 'Click with 2nd or 3rd mouse button to select image...')
+        plt.figure(1).text(0.05, 0.5, 'Click in main image or tSNE plot to find similar cutouts...')
 
         plt.figure(1).show()
         plt.figure(1).canvas.draw()
@@ -74,7 +78,7 @@ class tSNEInteract:
 
         # Plot the green circles on the tsne plot
         self._display_tsne()
-        self._tsne_window.plot(self._Y_tsne[inds[:9],0], self._Y_tsne[inds[:9],1], 'go')
+        self._tsne_window.plot(self._Y_tsne[inds[:9],0], self._Y_tsne[inds[:9],1], 'yo')
 
         self._sub_window_filenames = []
         for ii, axis in enumerate(self._sub_windows):
@@ -82,7 +86,7 @@ class tSNEInteract:
 
             filename, sliceno, middle = self._process_result_filename_cutout_number[inds[ii]]
 
-            self._display_window(axis, filename)
+            self._display_window(axis, filename, extra=ii)
             self._sub_window_filenames.append(filename)
 
             # Draw the line
@@ -109,21 +113,17 @@ class tSNEInteract:
         #              for filename, cutout_no, middle in self._process_result_filename_cutout_number
         #              if self._main_window_filename in filename]
         distances = []
-        for filename, cutout_no, middle in self._process_result_filename_cutout_number:
-            if self._main_window_filename == filename:
+        indexes = []
+        print('main filename is {}'.format(self._main_window_filename))
+        for ii, (filename, cutout_no, middle) in enumerate(self._process_result_filename_cutout_number):
+            if self._main_window_filename in filename:
                 d = np.sum((np.array([x, y]) - np.array(middle))**2)
                 distances.append(d)
+                indexes.append(ii)
+        print(distances[:9])
         inds = np.argsort(np.array(distances))
 
-        filename, cutoutnumber, middle = self._process_result_filename_cutout_number[inds[0]]
-
-        ## TEST
-        plt.figure(2)
-        print(filename)
-        td = pickle.load(open(filename, 'rb'))
-        plt.imshow(td['cutouts'][cutoutnumber]['data'])
-        plt.figure(2).canvas.draw()
-        plt.show()
+        filename, cutoutnumber, middle = self._process_result_filename_cutout_number[indexes[inds[0]]]
 
         axis = self._main_window
         axis.plot([middle[0] - 112, middle[0] - 112], [middle[1] - 112, middle[1] + 112], 'y')
@@ -131,7 +131,7 @@ class tSNEInteract:
         axis.plot([middle[0] - 112, middle[0] + 112], [middle[1] - 112, middle[1] - 112], 'y')
         axis.plot([middle[0] - 112, middle[0] + 112], [middle[1] + 112, middle[1] + 112], 'y')
 
-        self._display_from_tsne(self._Y_tsne[inds[0],0], self._Y_tsne[inds[0],1])
+        self._display_from_tsne(self._Y_tsne[indexes[inds[0]],0], self._Y_tsne[indexes[inds[0]],1])
 
     def _onclick(self, event):
 
@@ -144,8 +144,7 @@ class tSNEInteract:
 
         # If it is a middle mouse button click in one of the sub-windows
         # then we will copy it to the main window.
-        if event.inaxes in self._sub_windows and event.button == 2:
-            print('button 2')
+        if event.inaxes in self._sub_windows and event.button in [2, 3]:
             # get the filename for the main window
             index = self._sub_windows.index(event.inaxes)
             self._main_window_filename = self._sub_window_filenames[index]
@@ -153,7 +152,7 @@ class tSNEInteract:
             self._display_window(self._main_window, self._main_window_filename)
             plt.figure(1).canvas.draw()
 
-    def _display_window(self, axes, filename):
+    def _display_window(self, axes, filename, extra=None):
         """
         Display the hubble data in the file at filename and display
         into the axes. It could be main axes or one of the sub windows.
@@ -174,8 +173,12 @@ class tSNEInteract:
         axes.set_yticks([])
         clow, chigh = np.percentile(data, (1, 99))
         axes.get_images()[0].set_clim((clow, chigh))
-        axes.set_title(filename.split('_')[-1])
 
+        tt = filename.split('_')[-1]
+        if extra:
+            tt += ' ' + str(extra)
+        axes.set_title(tt)
+        plt.figure(1).canvas.draw()
 
 if __name__ == "__main__":
 
