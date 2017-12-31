@@ -6,19 +6,21 @@ import os
 from astropy.io import fits
 import matplotlib.pyplot as plt
 
-# Get the data directory information
-from config import Configuration
-c = Configuration()
-data_directory = c.data_directory
-
 class tSNEInteract:
 
-    def __init__(self):
+    def __init__(self, directory):
+
+        #directory = '/home/craig/stsci/hubble/HST/cutouts/median_filtered/results/resnet50/tsne'
+        self._tsne_directory = directory
+        self._cutouts_directory = directory.split('results')[0]
+        self._data_directory = directory.split('cutouts')[0] + '/data'
+
         # Choose the NN model to use
-        self._model_name = 'resnet50'
-        #self._model_name = 'inceptionresnetv2'
-        #self._model_name = 'inceptionv3'
-        self._main_window_filename = 'hubble_cutouts_u2rq0101t.pck'
+        self._model_name = directory.split('/')[-2]
+
+        print('Data directory is {}'.format(self._data_directory))
+        data_files = glob.glob(os.path.join(self._data_directory, '*', '*drz*fits.gz'))
+        self._main_window_filename = data_files[0]
 
         self._main_window = None
         self._tsne_window = None
@@ -30,11 +32,11 @@ class tSNEInteract:
         # Load the tSNE
         #  Each line of Y_tsne correpsonds to a line of process_result_filename_cutout_number
         print('Loading tSNE pre-calculated...')
-        self._Y_tsne, self._labels, self._process_result_filename_cutout_number = pickle.load( open('{}/tSNE/Y_labels_{}.pck'.format(data_directory, self._model_name), 'rb'))
+        self._Y_tsne, self._labels, self._process_result_filename_cutout_number = pickle.load( open(self._tsne_directory+'/Y_labels.pck', 'rb'))
 
         self._display_tsne()
 
-        self._display_window(self._main_window, os.path.join(data_directory, self._main_window_filename))
+        self._display_window(self._main_window, os.path.join(self._data_directory, self._main_window_filename))
 
     def _display_tsne(self):
         self._tsne_window.clear()
@@ -71,6 +73,7 @@ class tSNEInteract:
 
         # Find the closest 9
         inds = np.argsort(np.sum( (self._Y_tsne-np.array([x, y]))**2, axis=1))
+        print(inds[:10])
 
         # Plot the green circles on the tsne plot
         self._display_tsne()
@@ -81,8 +84,15 @@ class tSNEInteract:
             axis.clear()
 
             filename, sliceno, middle = self._process_result_filename_cutout_number[inds[ii]]
+            print('display from tsne {}'.format(filename))
 
-            self._display_window(axis, filename)
+            # So, the filename actually contains the wrong path on it so we
+            # need to take it off and use the proper path.
+            pf = pickle.load(open(os.path.join(self._cutouts_directory, filename), 'rb'))
+            ff = list(glob.iglob('{}/**/{}'.format(self._data_directory, pf['filename'].split('/')[-1])))[0]
+
+            print(ff)
+            self._display_window(axis, ff)
             self._sub_window_filenames.append(filename)
 
             # Draw the line
@@ -110,20 +120,13 @@ class tSNEInteract:
         #              if self._main_window_filename in filename]
         distances = []
         for filename, cutout_no, middle in self._process_result_filename_cutout_number:
+            print(self._main_window_filename, filename)
             if self._main_window_filename == filename:
                 d = np.sum((np.array([x, y]) - np.array(middle))**2)
                 distances.append(d)
         inds = np.argsort(np.array(distances))
 
         filename, cutoutnumber, middle = self._process_result_filename_cutout_number[inds[0]]
-
-        ## TEST
-        plt.figure(2)
-        print(filename)
-        td = pickle.load(open(filename, 'rb'))
-        plt.imshow(td['cutouts'][cutoutnumber]['data'])
-        plt.figure(2).canvas.draw()
-        plt.show()
 
         axis = self._main_window
         axis.plot([middle[0] - 112, middle[0] - 112], [middle[1] - 112, middle[1] + 112], 'y')
@@ -162,10 +165,9 @@ class tSNEInteract:
         :param filename:
         :return:
         """
-        pf = pickle.load(open(filename, 'rb'))
-        ff = glob.glob('{}/../*/{}'.format(data_directory, pf['filename'].split('/')[-1]))
 
-        data = self._rgb2plot(fits.open(ff[0])[1].data)
+        fn = os.path.join(self._data_directory, filename)
+        data = self._rgb2plot(fits.open(fn)[1].data)
 
         # Plot the hubble data in a subplot
         axes.clear()
@@ -179,4 +181,8 @@ class tSNEInteract:
 
 if __name__ == "__main__":
 
-    tsnei = tSNEInteract()
+    #directory = '/home/craig/stsci/hubble/HST/cutouts/median_filtered/results/resnet50/tsne'
+    directory = sys.argv[1]
+
+    tsnei = tSNEInteract(directory)
+

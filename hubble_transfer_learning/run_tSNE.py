@@ -2,92 +2,61 @@ import time
 import pickle
 from itertools import chain
 import sys
+import glob
+import os
+import json
 import numpy as np
 from sklearn.manifold import TSNE
 from config import Configuration
 
-from blitzdb import Document
-from blitzdb import FileBackend
+#inceptionresnetv2  inceptionv3  resnet50  vgg16  vgg19
+#data_directory = '/home/craig/stsci/hubble/HST/cutouts/basic/results/inceptionv3'
 
-# Load the configuration file information
-c = Configuration()
-data_directory = c.data_directory
+data_directory = sys.argv[1]
 
-# Setup the storage mechanism
-backend = FileBackend("{}/prediction_database".format(data_directory))
+if not os.path.isdir( os.path.join(data_directory, 'tsne') ):
+    os.mkdir( os.path.join(data_directory, 'tsne') )
 
+results_directory = os.path.join(data_directory, 'tsne')
 
-class DataDescription(Document):
-    pass
+files = glob.glob(os.path.join(data_directory, '*.json'))
 
+# Find all the unique labels
+labels = []
+for filename in files:
+    data = json.load(open(filename, 'rt'))
+    for s,v in data['results'].items():
+        labels.extend([list(x.keys()) for x in v['predictions']])
+labels = list(set(chain.from_iterable(labels)))
+print(labels)
 
-class ProcessDescription(Document):
-    pass
+# Calculate the X matrix which will be passed to tSNE
+print('Calculate the tSNE...')
+start = time.time()
+prediction_results = []
+process_result_filename_cutout_number = []
+ii = 0
+for ii, filename in enumerate(files):
 
+    data = json.load(open(filename, 'rt'))
+    for _,v in data['results'].items():
+        tt = np.zeros((len(labels),))
 
-class ProcessResult(Document):
-    pass
+        for prediction in v['predictions']:
+            k = list(prediction.keys())[0]  #There is only one
+            pred_value = prediction[k]
+            tt[labels.index(k)] = pred_value
 
+        prediction_results.append(tt)
 
-print('Data Descriptions')
-dds = backend.filter(DataDescription, {})
-for dd in dds:
-    print('\t', dd.name)
+        process_result_filename_cutout_number.append( (v['filename'], v['cutout_number'], v['middle']) )
 
-# Run through several different models in order to create the tSNE.
-for model_name in ['resnet50', 'vgg16', 'vgg19', 'inceptionv3', 'inceptionresnetv2']:
+X = np.array(prediction_results)
 
-    #  Data description part
-    try:
-        data_description = backend.get(DataDescription,{'name' : 'hubblecutouts'})
-    except DataDescription.DoesNotExist:
-        print("Data desription doesn't exist")
-        sys.exit(0)
-    except DataDescription.MultipleDocumentsReturned:
-        #more than one 'Charlie' in the database
-        pass
-    print('Data description is {}'.format(data_description.name))
+# Compute the tSNE of the data.
+Y = TSNE(n_components=2).fit_transform(X)
+print('\tCalculate the tSNE took {} seconds'.format(time.time() - start))
 
-    #  Process description part
-    try:
-        process_description = backend.get(ProcessDescription,{'name' : model_name})
-    except ProcessDescription.DoesNotExist:
-        print("Process desription doesn't exist")
-        sys.exit(0)
-    except ProcessDescription.MultipleDocumentsReturned:
-        pass
-    print('Process description is {}'.format(process_description.name))
-
-    # Grab the process results given the data description and process description information
-    process_results = backend.filter(ProcessResult,{'data_description.pk' : data_description.pk, 'process_description.pk': process_description.pk}).sort('pk')
-    N = len(process_results)
-
-    # Find all the unique labels
-    labels = []
-    for pr in process_results:
-        labels.extend([list(x.keys()) for x in pr.predictions])
-    labels = list(set(chain.from_iterable(labels)))
-    print(labels)
-
-    # Calculate the X matrix which will be passed to tSNE
-    print('Calculate the tSNE...')
-    start = time.time()
-    X = np.zeros((N, len(labels)))
-    process_result_filename_cutout_number = []
-    ii = 0
-    for x in process_results:
-        for jj in x.predictions:
-            k = list(jj.keys())[0]
-            v = jj[k]
-            X[ii,labels.index(k)] = v
-        ii = ii + 1
-        process_result_filename_cutout_number.append( (x.filename, x.cutout_number, x.middle) )
-    print(X)
-
-    # Compute the tSNE of the data.
-    Y = TSNE(n_components=2).fit_transform(X)
-    print('\tCalculate the tSNE took {} seconds'.format(time.time() - start))
-
-    # Write the data out to the tSNE sub directory
-    pickle.dump((Y, labels, process_result_filename_cutout_number),
-                open('{}/tSNE/Y_labels_{}.pck'.format(data_directory, model_name), 'wb'))
+# Write the data out to the tSNE sub directory
+pickle.dump((Y, labels, process_result_filename_cutout_number),
+            open('{}/Y_labels.pck'.format(results_directory), 'wb'))

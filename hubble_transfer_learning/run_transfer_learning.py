@@ -1,12 +1,15 @@
 import pickle
 import time
+import os
+import json
 import numpy as np
 import glob
 from collections import OrderedDict
-from blitzdb import Document
-from blitzdb import FileBackend
 from config import Configuration
 
+#data_directory = '/home/craig/stsci/hubble/ACS_Halpha/cutouts/basic'
+#data_directory = '/home/craig/stsci/hubble/HST/cutouts/basic'
+results_directory = os.path.join(data_directory, 'results')
 
 def gray2rgb(data):
     """
@@ -15,10 +18,10 @@ def gray2rgb(data):
     :param data:
     :return:
     """
-    data_out = np.zeros((224, 224, 3, data.shape[0]))
-    data_out[:, :, 0] = data.transpose((1, 2, 0))
-    data_out[:, :, 1] = data.transpose((1, 2, 0))
-    data_out[:, :, 2] = data.transpose((1, 2, 0))
+    data_out = np.zeros((224, 224, 3))
+    data_out[:, :, 0] = data
+    data_out[:, :, 1] = data
+    data_out[:, :, 2] = data
 
     return data_out
 
@@ -34,40 +37,11 @@ def rgb2plot(data):
     return np.clip((data - mindata) / (maxdata - mindata) * 255, 0, 255).astype(np.uint8)
 
 
-# Load the configuration file information
-c = Configuration()
-data_directory = c.data_directory
-
-# Setup the storage mechanism
-backend = FileBackend("{}/prediction_database".format(data_directory))
-
-
-class DataDescription(Document):
-    pass
-
-
-class ProcessDescription(Document):
-    pass
-
-
-class ProcessResult(Document):
-    pass
-
-
-#  Save the data description part to the database
-try:
-    data_description = backend.get(DataDescription, {'name': 'hubblecutouts'})
-except DataDescription.DoesNotExist:
-    doc = {'name': 'hubblecutouts', 'description': 'hubble cutouts from Josh'}
-    data_description = DataDescription(doc)
-    backend.save(data_description) 
-    backend.commit()
-except DataDescription.MultipleDocumentsReturned:
-    # more than one in the database, ignore for now
-    pass
+data_description = {'name': 'acs_halpha', 'description': 'ACS Halpha from Josh'}
 
 # Now run through all the models
-for model_name in ['resnet50', 'vgg16', 'vgg19', 'inceptionv3', 'inceptionresnetv2']:
+#for model_name in ['resnet50', 'vgg16', 'vgg19', 'inceptionv3', 'inceptionresnetv2']:
+for model_name in ['vgg16', 'vgg19', 'inceptionv3', 'inceptionresnetv2']:
     if model_name == 'resnet50':
         # Add the process description information
         from keras.applications.resnet50 import ResNet50
@@ -95,26 +69,21 @@ for model_name in ['resnet50', 'vgg16', 'vgg19', 'inceptionv3', 'inceptionresnet
         model = InceptionResNetV2(weights='imagenet')
         model_name = 'inceptionresnetv2'
     
-    #  Save the process description part
-    try:
-        process_description = backend.get(ProcessDescription, {'name': model_name})
-    except ProcessDescription.DoesNotExist:
-        doc = {'name': model_name, 'description': '{} with imagenet'.format(model_name)}
-        process_description = ProcessDescription(doc)
-        backend.save(process_description) 
-        backend.commit()
-    except ProcessDescription.MultipleDocumentsReturned:
-        pass
-    print(process_description.name)
+    process_description = {'name': model_name, 'description': '{} with imagenet'.format(model_name)}
+    print(process_description)
     
+    result = {}
+    result['data_descrption'] = data_description
+    result['process_descrption'] = process_description
+
     # ---------------------------------------------------------------------
     # Load and pre-processing
     # ---------------------------------------------------------------------
 
-    files = glob.glob('{}/hubble_cutouts_*.pck'.format(data_directory))
+    files = glob.glob('{}/*_cutouts_*.pck'.format(data_directory))
     
     # Load in the data
-    allpredictions = OrderedDict()
+    allpredictions = {}
     for filename in files:
 
         # Load up the cutouts
@@ -128,8 +97,12 @@ for model_name in ['resnet50', 'vgg16', 'vgg19', 'inceptionv3', 'inceptionresnet
         # ---------------------------------------------------------------------
     
         # Calculate the predicitons for all data
+
+        tt = os.path.split(filename)
+        path, fname = tt
     
         start = time.time()
+        file_results = {}
         for ii in range(N):
             print('\r\t{} of {}'.format(ii, N), end='')
 
@@ -153,15 +126,20 @@ for model_name in ['resnet50', 'vgg16', 'vgg19', 'inceptionv3', 'inceptionresnet
 
             # Save the results in the database.
             doc = {
-                'data_description': data_description, 
-                'process_description': process_description, 
-                'filename': filename,
+                'filename': fname,
                 'middle': data_orig['cutouts'][ii]['middle'],
                 'cutout_number': ii,
                 'predictions': [{tt[1]: np.float64(tt[2])} for tt in predictions]
                 }
-            process_result = ProcessResult(doc)
-            backend.save(process_result) 
-            backend.commit()
+            file_results[ii] = doc
     
+        result['results'] = file_results
+
+        if not os.path.isdir(os.path.join(results_directory, model_name)):
+            os.mkdir(os.path.join(results_directory, model_name))
+
+        filename_results = os.path.join(results_directory, model_name, fname.replace('pck', 'json'))
+        print('\tSaving to {}'.format(filename_results))
+        json.dump(result, open(filename_results, 'wt'))
+
         print('\r\tCalculate the predictions took {} seconds'.format(time.time() - start))
