@@ -49,7 +49,7 @@ for ii, filename in enumerate(files):
 
         prediction_results.append(tt)
 
-        process_result_filename_cutout_number.append( (v['filename'], v['cutout_number'], v['middle']) )
+        process_result_filename_cutout_number.append( (v['fits_filename'], v['filename'], v['cutout_number'], v['middle']) )
 
 X = np.array(prediction_results)
 

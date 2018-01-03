@@ -15,6 +15,10 @@ class tSNEInteract:
         self._cutouts_directory = directory.split('results')[0]
         self._data_directory = directory.split('cutouts')[0] + '/data'
 
+        print('tSNE directory {}'.format(self._tsne_directory))
+        print('Cutouts directory {}'.format(self._cutouts_directory))
+        print('Data directory {}'.format(self._data_directory))
+
         # Choose the NN model to use
         self._model_name = directory.split('/')[-2]
 
@@ -90,7 +94,7 @@ class tSNEInteract:
         :return:
         """
 
-        mindata, maxdata = np.percentile(data, (0.01, 99))
+        mindata, maxdata = np.percentile(data[np.isfinite(data)], (0.01, 99))
         return np.clip((data - mindata) / (maxdata-mindata) * 255, 0, 255).astype(np.uint8)
 
     def _display_from_tsne(self, x, y):
@@ -114,8 +118,8 @@ class tSNEInteract:
         for ii, axis in enumerate(self._sub_windows):
             axis.clear()
 
-            filename, sliceno, middle = self._process_result_filename_cutout_number[inds[ii]]
-            print('display from tsne {}'.format(filename))
+            fits_filename, filename, sliceno, middle = self._process_result_filename_cutout_number[inds[ii]]
+            print('display from tsne fits: {} filename: {}'.format(fits_filename, filename))
 
             # So, the filename actually contains the wrong path on it so we
             # need to take it off and use the proper path.
@@ -124,7 +128,7 @@ class tSNEInteract:
 
             print(ff)
             self._display_window(axis, ff)
-            self._sub_window_filenames.append(filename)
+            self._sub_window_filenames.append(fits_filename)
 
             # Draw the line
             axis.plot([middle[0]-112, middle[0]-112], [middle[1]-112, middle[1]+112], 'y')
@@ -164,16 +168,14 @@ class tSNEInteract:
         #              for filename, cutout_no, middle in self._process_result_filename_cutout_number
         #              if self._main_window_filename in filename]
         distances = []
-        for filename, cutout_no, middle in self._process_result_filename_cutout_number:
-            print(self._main_window_filename, filename)
-            if self._main_window_filename == filename:
+        for fits_filename, filename, cutout_no, middle in self._process_result_filename_cutout_number:
+            if self._main_window_filename.split('/')[-1] == fits_filename.split('/')[-1]:
                 d = np.sum((np.array([x, y]) - np.array(middle))**2)
                 distances.append(d)
-                indexes.append(ii)
         print(distances[:9])
         inds = np.argsort(np.array(distances))
 
-        filename, cutoutnumber, middle = self._process_result_filename_cutout_number[inds[0]]
+        fits_filename, filename, cutoutnumber, middle = self._process_result_filename_cutout_number[inds[0]]
 
         axis = self._main_window
         axis.plot([middle[0] - 112, middle[0] - 112], [middle[1] - 112, middle[1] + 112], 'y')
@@ -181,7 +183,7 @@ class tSNEInteract:
         axis.plot([middle[0] - 112, middle[0] + 112], [middle[1] - 112, middle[1] - 112], 'y')
         axis.plot([middle[0] - 112, middle[0] + 112], [middle[1] + 112, middle[1] + 112], 'y')
 
-        self._display_from_tsne(self._Y_tsne[indexes[inds[0]],0], self._Y_tsne[indexes[inds[0]],1])
+        self._display_from_tsne(self._Y_tsne[inds[0],0], self._Y_tsne[inds[0],1])
 
     def _onclick(self, event):
         """
@@ -204,7 +206,17 @@ class tSNEInteract:
         if event.inaxes in self._sub_windows and event.button in [2, 3]:
             # get the filename for the main window
             index = self._sub_windows.index(event.inaxes)
-            self._main_window_filename = self._sub_window_filenames[index]
+
+            # TODO: Remove Hack
+            print(self._sub_window_filenames[index])
+            tf = self._sub_window_filenames[index].split('/')[-1]
+            print(tf)
+            filename = glob.glob(self._data_directory + '/**/' + tf)[0]
+            print(filename)
+            filename = filename.replace(self._data_directory, '').strip('/')
+            print(filename)
+            #self._main_window_filename = self._sub_window_filenames[index]
+            self._main_window_filename = filename
 
             self._display_window(self._main_window, self._main_window_filename)
             plt.figure(1).canvas.draw()
@@ -227,10 +239,11 @@ class tSNEInteract:
         axes.imshow(data, cmap=plt.gray(), origin='upper')
         axes.set_xticks([]) 
         axes.set_yticks([])
-        clow, chigh = np.percentile(data, (1, 99))
+        clow, chigh = np.percentile(data[np.isfinite(data)], (1, 99))
         axes.get_images()[0].set_clim((clow, chigh))
 
-        tt = filename.split('_')[-1]
+        # Display the filename as the title of the axes
+        tt = filename.split('/')[-1]
         if extra:
             tt += ' ' + str(extra)
         axes.set_title(tt)
