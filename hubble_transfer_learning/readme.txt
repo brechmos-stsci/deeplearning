@@ -21,26 +21,23 @@ But, obviously, change the directory above.
   make changes. Probably best to change the name before storage in the database so things are kept
   different.
 
+  e.g.,  in ipython
+
+    >> run -i run_transfer_learning.py /Users/crjones/science/hubble/HST/cutouts/median_filtered/ resnet50
+
 2. run_tSNE.py
     Calculate the tSNE value for each NN pre-trained model based on predictions from previous code.
 
     This just reads the predictions and calculates the tSNE values.
+
+  e.g., in ipython 
+
+  >> run -i run_tSNE.py /Users/crjones/science/hubble/HST/cutouts/median_filtered/results/resnet50
 
 3. show_transfer_learning.py
   Display the tSNE and allow interaction between it and the images (very basic first version).
 
 To run any of these from iptyhon use:
 
-run -i <script name>
+  >> run -i show_transfer_learning.py /Users/crjones/science/hubble/HST/cutouts/median_filtered/results/vgg19/tsne
 
-And show_transfer_learning.py takes a parameter too:
-
-run -i show_transfer_learning.py resnet50
-
-The model 'resnet50' can be any one of 'resnet50', 'vgg16', 'vgg19', 'inceptionresnetv2', 'inceptionv3'
-
-
-## Helper Code
-
-show_blitzdb.py
-  Helper script to make sure the database is created correctly.
